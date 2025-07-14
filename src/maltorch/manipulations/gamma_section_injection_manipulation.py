@@ -33,7 +33,7 @@ class GAMMASectionInjectionManipulation(ByteManipulation):
         self._names = [
             ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)) for _ in range(self.how_many_sections)
         ]
-        for path in sorted(self.benignware_folder.glob("*")):
+        for path in sorted(self.benignware_folder.glob("*"))[:100]:
             if not lief.is_pe(str(path)):
                 continue
             lief_pe = lief.parse(str(path))

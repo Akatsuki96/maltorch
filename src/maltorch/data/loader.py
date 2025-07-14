@@ -27,6 +27,7 @@ def load_from_folder(
             break
     X = torch.nn.utils.rnn.pad_sequence(X, padding_value=padding).transpose(0, 1).long()
     X = X.to(device)
+    print(X, X.shape)
     return X
 
 
