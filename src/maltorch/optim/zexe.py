@@ -197,7 +197,7 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
             print("VALUES: ", self.fvalues)
             self.h = max(self.h / self.k, 0.01)
 
-            if np.linalg.norm(self.g) < 0.01: 
+            if False and np.linalg.norm(self.g) < 0.01: 
                 print("EXPLORATION")
                 self.phase = ZEXEPhase.EXPLORATION
 #                self.num_iters = 0
