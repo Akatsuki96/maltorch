@@ -16,7 +16,9 @@ from maltorch.adv.evasion.gamma_section_injection import GAMMASectionInjection
 
 from maltorch.optim.zexe import ExplorationStrategyID
 
+import multiprocessing
 from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 
 device = "cpu"
 
@@ -50,16 +52,18 @@ networks = {
 }
 model = networks[model_name]
 reps = 5
+attack = GAMMASectionInjection(
+    query_budget=budget,
+    benignware_folder= Path(goodware_dir),#exe_folder / ".." / "benignware",
+    which_sections=[".text"],
+    how_many_sections=num_sections
+)
+
 def run_experiment(file_path):
     for r in range(reps):
         print(f"[{r}/{reps}] Attacking {file_path}...")
+
         with open(f"{out_dir}/gamma_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}.txt", "w") as f:
-            attack = GAMMASectionInjection(
-                query_budget=budget,
-                benignware_folder= Path(goodware_dir),#exe_folder / ".." / "benignware",
-                which_sections=[".text"],
-                how_many_sections=num_sections
-            )
             x = load_single_exe(file_path).reshape(1, -1).long()
             y = create_labels(x, 1, device=device)
             dl = DataLoader(TensorDataset(x, y), batch_size=1)
@@ -77,6 +81,10 @@ def run_experiment(file_path):
             f.write(f"{pre_accuracy},{pre_score},{accuracy},{score},{plain_length},{adv_length}\n")
             f.flush()
 
-with Pool(processes=num_processes) as p:
-    p.map(run_experiment, file_paths)
+
+if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn')
+
+    with ProcessPoolExecutor(max_workers=num_processes) as p:
+        p.map(run_experiment, file_paths)
 
