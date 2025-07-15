@@ -52,16 +52,18 @@ networks = {
 }
 model = networks[model_name]
 reps = 5
-attack = GAMMASectionInjection(
-    query_budget=budget,
-    benignware_folder= Path(goodware_dir),#exe_folder / ".." / "benignware",
-    which_sections=[".text"],
-    how_many_sections=num_sections
-)
 
 def run_experiment(file_path):
     for r in range(reps):
         print(f"[{r}/{reps}] Attacking {file_path}...")
+
+        attack = GAMMASectionInjection(
+            query_budget=budget,
+            benignware_folder= Path(goodware_dir),#exe_folder / ".." / "benignware",
+            which_sections=[".text"],
+            how_many_sections=num_sections
+        )
+
 
         with open(f"{out_dir}/gamma_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}.txt", "w") as f:
             x = load_single_exe(file_path).reshape(1, -1).long()
@@ -85,6 +87,6 @@ def run_experiment(file_path):
 if __name__ == "__main__":
     multiprocessing.set_start_method('spawn')
 
-    with ProcessPoolExecutor(max_workers=num_processes) as p:
+    with Pool(processes=num_processes) as p:
         p.map(run_experiment, file_paths)
 
