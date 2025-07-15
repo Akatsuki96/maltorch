@@ -2,6 +2,7 @@ import sys
 import os
 from pathlib import Path
 from math import log
+import torch
 from secmlt.metrics.classification import Accuracy
 from torch.utils.data import TensorDataset, DataLoader
 
@@ -37,7 +38,7 @@ num_processes = int(sys.argv[7])
 os.makedirs(out_dir, exist_ok=True)
 
 budget = 500
-file_paths = [path for path in malware_folder.glob("*.dat")]#[:10]
+file_paths = [path for path in malware_folder.glob("*.dat")]
 
 
 def create_model(name, threshold):
@@ -54,18 +55,21 @@ def create_model(name, threshold):
 
 
 reps = 5
-attack = GAMMASectionInjection(
-    query_budget=budget,
-    benignware_folder= Path(goodware_dir),#exe_folder / ".." / "benignware",
-    which_sections=[".text"],
-    how_many_sections=num_sections
-)
 model = create_model(model_name, threshold) 
 
 
 
 def run_experiment(file_path):
     for r in range(reps):
+        torch.manual_seed(1123 + 143*r)
+        attack = GAMMASectionInjection(
+            query_budget=budget,
+            benignware_folder= Path(goodware_dir),#exe_folder / ".." / "benignware",
+            which_sections=[".text"],
+            random_init=True,
+            how_many_sections=num_sections
+        ) 
+
         print(f"[{r}/{reps}] Attacking {file_path}...")
         with open(f"{out_dir}/gamma_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}.txt", "a") as f:
             x = load_single_exe(file_path).reshape(1, -1).long()
@@ -83,7 +87,6 @@ def run_experiment(file_path):
                 print("ADDED BYTES", x_adv.flatten().shape[0] - x.flatten().shape[0])
             f.write(f"{pre_accuracy},{pre_score},{accuracy},{score},{plain_length},{adv_length}\n")
             f.flush()
-    return True
 
 
 if __name__ == "__main__":
@@ -91,5 +94,5 @@ if __name__ == "__main__":
 
     with Pool(processes=num_processes) as p:
 
-        result = p.map(run_experiment, file_paths)
+        p.map(run_experiment, file_paths)
 
