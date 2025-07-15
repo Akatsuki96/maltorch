@@ -43,22 +43,6 @@ class LangevinExploration(ExplorationStrategy):
         return x + np.sqrt(2 * self.beta(k) ) * self.rnd_state.randn(x.shape[0], x.shape[1])
 
 
-class AddSection(ExplorationStrategy):
-    def __init__(self, num_sections : int = 1, content_size: int = 512):
-        self.num_sections = num_sections
-        self.content_size = content_size
-        self.current_idx = 0
-
-    def mutate(self, x, g, gamma, k, X, y):
-        new_section = np.zeros((1, self.num_sections * (self.content_size + 8)))
-        if self.current_idx == 0:
-            self.current_idx = x.shape[1]
-        else:
-            self.current_idx += self.num_sections * (self.content_size + 8)
-        return np.hstack((x, new_section))
-
-
-
 
 class RandomExploration(ExplorationStrategy):
     def __init__(self, eps : float = 0.1, patience = 1, seed : int = 42):
@@ -180,7 +164,6 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
 
     def _internal_ask_candidate(self) -> p.Parameter:
         if self.phase == ZEXEPhase.FORWARD_DIRECTION:
-            print(self.current_iterate.shape, self.d, self.P[:, self.current_idx].shape)
             new_iterate = self.current_iterate + self.h * self.P[:, self.current_idx].reshape((1, self.d))
             
         if self.phase == ZEXEPhase.LINE_SEARCH_STEP:
@@ -192,12 +175,12 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
 
         if self.phase == ZEXEPhase.ITERATE:
             self.g = self._grad_ask()
-#            self.current_value = self.fvalues[0] # f(x_k)
+
             self.k += 1
             print("VALUES: ", self.fvalues)
             self.h = max(self.h / self.k, 0.01)
 
-            if False and np.linalg.norm(self.g) < 0.01: 
+            if np.linalg.norm(self.g) < 0.01: 
                 print("EXPLORATION")
                 self.phase = ZEXEPhase.EXPLORATION
 #                self.num_iters = 0

@@ -20,7 +20,7 @@ from maltorch.optim.zexe import ExplorationStrategyID
 import multiprocessing
 from multiprocessing import Pool
 from concurrent.futures import ProcessPoolExecutor
-
+import itertools
 device = "cpu"
 
 malware_folder = Path(sys.argv[1])
@@ -95,5 +95,5 @@ if __name__ == "__main__":
 
     with Pool(processes=num_processes) as p:
 
-        p.map(run_experiment, zip(file_paths, reps_list))
+        p.map(run_experiment, list(itertools.product(file_paths, reps_list)))
 
