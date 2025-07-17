@@ -24,6 +24,8 @@ class ExplorationStrategyID(Enum):
     RANDOM = 1
     LANGEVIN = 2
     ANNEALING = 3
+    GA = 4
+
 
 class ExplorationStrategy:
 
@@ -32,7 +34,10 @@ class ExplorationStrategy:
 
 class NoExploration(ExplorationStrategy):
     def mutate(self, x, g, gamma, k, X, y):
-        return x
+        return x - gamma * g
+    
+    def update(self, x, y):
+        pass
 
 class LangevinExploration(ExplorationStrategy):
     def __init__(self, beta: float | Callable[[int], float] = 0.1, seed : int = 42):
@@ -40,24 +45,41 @@ class LangevinExploration(ExplorationStrategy):
         self.rnd_state = np.random.RandomState(seed)
 
     def mutate(self, x, g, gamma, k, X, y):
-        return x + np.sqrt(2 * self.beta(k) ) * self.rnd_state.randn(x.shape[0], x.shape[1])
+        return x - gamma * g + np.sqrt(2 * self.beta(k) ) * self.rnd_state.randn(x.shape[0], x.shape[1])
 
+    def update(self, x, y):
+        pass
 
 
 class RandomExploration(ExplorationStrategy):
-    def __init__(self, eps : float = 0.1, patience = 1, seed : int = 42):
+    def __init__(self, eps : float = 0.1, seed : int = 42):
         self.eps = eps
-        self.patience = patience
-        self.current_pt = 0
         self.rnd_state = np.random.RandomState(seed)
 
     def mutate(self, x, g, gamma, k, X, y):
         if np.linalg.norm(g, ord=2) < self.eps:
-            self.current_pt += 1
-        if self.current_pt >= self.patience:
-            self.current_pt = 0
             return self.rnd_state.rand(x.shape[0], x.shape[1]) - 0.5
-        return x 
+        return x - gamma * g
+    
+    def update(self, x, y):
+        pass
+
+class GAExploration(ExplorationStrategy):
+    def __init__(self, perturbation_size, popsize : int = 10, seed : int = 42):
+        self.perturbation_size = perturbation_size
+        self.rnd_state = np.random.RandomState(seed)
+        self.popsize = popsize
+        self.de = _DE(p.Array(shape=(perturbation_size, )).set_bounds(-0.5, 0.5), config=DifferentialEvolution(popsize=popsize, crossover="twopoints"))
+
+    def mutate(self, x, g, gamma, k, X, y):
+        if np.linalg.norm(g, ord=2) < self.eps:
+            self.current_elem = self.de.ask()
+            return self.current_elem.value
+        return x - gamma * g 
+    
+    def update(self, x, y):
+        self.de.tell(self.current_elem, y)
+
 
 def get_expl_strategy(strategy: ExplorationStrategyID, params: dict):
     if strategy == ExplorationStrategyID.NOEXPLORATION:
@@ -88,18 +110,11 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
         self.init_stepsize = self._config.stepsize
         self.h = self._config.h
         self.h_0 = self._config.h
-        self.max_sections = 1000
-#        self.max_content_size = 65536
-        self.popsize = self._config.popsize
+
         self.de = _DE(p.Array(shape=(3, )).set_bounds(0, 1), config=DifferentialEvolution(popsize=self.popsize, crossover="twopoints"))
         self.de_initialized = False
         self.manipulation_function= self._config.manipulation_function
-        self.max_pert_size = self.manipulation_function.how_many_sections * (8 + self.manipulation_function.content_size)  #1000 * (8 + 32768)#65536)
-        self.num_sections = self.manipulation_function.how_many_sections #self._config.num_sections
-       # self.content_size = self._config.content_size
 
-        self.reduce_size = self._config.reduce_size
-#        self.exploration_strategy = AddSection(self.num_section_to_add, self.manipulation_function.content_size)
         self.armijo_constant = self._config.armijo_constant
         self.min_stepsize = self._config.min_stepsize
         self.max_stepsize = self._config.max_stepsize
@@ -117,7 +132,6 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
         self.X, self.Y = np.empty((0,), dtype=np.int64), np.empty((0,), dtype=np.int64)# [], []
 
     def generate_direction_matrix(self):
-#        return self.rnd_state.choice([-1.0, 0.0, 1.0], (self.d, self.num_directions) ) #2 * (self.rnd_state.rand(self.d, self.num_directions) < 0.5) - 1
         v = self.rnd_state.randn(self.d)
         v /= np.linalg.norm(v, ord=2)
         indices = self.rnd_state.choice(self.d, self.num_directions, replace=False)
@@ -317,7 +331,6 @@ class ZEXEOptimizer(ConfiguredOptimizer):
                     popsize : int = 10,
                     contraction_factor : float = 0.5,
                     expansion_factor : float = 2.0,
-                    reduce_size : bool = False,
                     exploration_strategy: ExplorationStrategyID = ExplorationStrategyID.RANDOM,
                     expl_strategy_params: dict = {},                    
                     beta : float = 0.001,
@@ -331,7 +344,6 @@ class ZEXEOptimizer(ConfiguredOptimizer):
         self.armijo_constant = armijo_constant
         self.num_directions = num_directions
         self.min_stepsize = min_stepsize
-        self.reduce_size = reduce_size
         self.manipulation_function= manipulation_function
         self.contraction_factor = contraction_factor
         self.expansion_factor = expansion_factor

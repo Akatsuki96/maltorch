@@ -66,7 +66,7 @@ def run_experiment(fpath_rep):
     attack = GAMMASectionInjection(
         query_budget=budget,
         benignware_folder= Path(goodware_dir),#exe_folder / ".." / "benignware",
-        which_sections=[".text"],
+        which_sections=[".rodata"],
         random_init=True,
         how_many_sections=num_sections
     ) 
