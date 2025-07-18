@@ -22,30 +22,19 @@ class ZEXESectionInjection(GradientFreeBackendAttack):
             query_budget: int,
             perturbation_size: int,
             how_many_sections: int,
-            stepsize : float = 1.0,
             num_workers: int = 1,
+            stepsize: float = 1.0, 
             h : float = 1.0,
             num_directions : int = 1,
-            beta : float = 0.001,
-            patience : int = 1,
-            eps : float = 0.1,
-            seed: int = 424242,
-            popsize = 10,
-            reduce_size = False,
-            no_exploit = False,
-            max_num_sections = 100,
-            max_content_size = int(2**15),
-            max_ls_steps = 10,
             armijo_constant : float = 1e-5,
             min_stepsize : float = 1e-5,
             max_stepsize : float = 1e3,
             contraction_factor : float = 0.5,
             expansion_factor : float = 2.0,
-            only_printable_char : bool = False,
-            method: str = "zexe", # can be random-search, zexe
-            expl_strat = 'rs',
             exploration_strategy: ExplorationStrategyID = ExplorationStrategyID.RANDOM,
-            #which_sections: list = None,
+            expl_strategy_params: dict = {},     
+            only_printable_char = False,
+            seed = 123141,
             y_target: Union[int, None] = None,
             random_init: bool = False,
             trackers: Union[List[Tracker], Tracker] = None,
@@ -56,66 +45,26 @@ class ZEXESectionInjection(GradientFreeBackendAttack):
             random_init=random_init
         )
 
-        self.content_size = perturbation_size // how_many_sections
+        self.content_size = perturbation_size // how_many_sections - 8
         # TODO: change this to ZEXESectionIjectionManipulation
         manipulation_function = ZEXESectionInjectionManipulation(
             how_many_sections=how_many_sections, 
             only_printable_char = only_printable_char,
             content_size=self.content_size)
 
-        if method == "random_search":
-            optimizer_cls = MalwareOptimizerFactory.create_rs(
-                seed=seed
-            )
-        elif method == "zexe":
-            optimizer_cls = MalwareOptimizerFactory.create_zexe(
-                stepsize=stepsize,
-                h=h,
-                eps=eps,
-                patience=patience,
-                exploration_strategy=exploration_strategy,
-                max_stepsize = max_stepsize,
-                armijo_constant = armijo_constant,
-                num_directions = num_directions,
-                min_stepsize = min_stepsize,
-                reduce_size = reduce_size,
-                popsize = popsize,
-                contraction_factor = contraction_factor,
-                expansion_factor = expansion_factor,
-                manipulation_function=manipulation_function,
-                beta=beta,
-                seed=seed
-            )
-        elif method == "zexers":
-            optimizer_cls = MalwareOptimizerFactory.create_zexers(
-                stepsize=stepsize,
-                h=h,
-                eps=eps,
-                patience=patience,
-                max_stepsize = max_stepsize,
-                armijo_constant = armijo_constant,
-                num_directions = num_directions,
-                min_stepsize = min_stepsize,
-                reduce_size = reduce_size,
-                popsize = popsize, expl_strategy=expl_strat,
-                contraction_factor = contraction_factor,
-                expansion_factor = expansion_factor,
-                manipulation_function=manipulation_function,
-                beta=beta,
-                seed=seed
-            )
-        elif method == "dzexe":
-            optimizer_cls = MalwareOptimizerFactory.create_dzexe(
-                num_directions=num_directions,
-                manipulation_function=manipulation_function,
-                armijo_constant = armijo_constant,
-                max_num_sections = max_num_sections,
-                max_content_size = max_content_size,
-                max_ls_steps = max_ls_steps,
-                no_exploit = no_exploit,
-                popsize=popsize,
-                seed=seed
-            )
+        optimizer_cls = MalwareOptimizerFactory.create_zexe(
+            stepsize = stepsize, 
+            h = h,
+            num_directions= num_directions,
+            armijo_constant = armijo_constant,
+            min_stepsize = min_stepsize,
+            max_stepsize  = max_stepsize,
+            contraction_factor = contraction_factor,
+            expansion_factor  = expansion_factor,
+            exploration_strategy = exploration_strategy,
+            expl_strategy_params = expl_strategy_params,     
+            seed=seed
+        )
         loss_function = BCEWithLogitsLoss(reduction="none")
 
         

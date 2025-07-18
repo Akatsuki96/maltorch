@@ -45,7 +45,8 @@ class LangevinExploration(ExplorationStrategy):
         self.rnd_state = np.random.RandomState(seed)
 
     def mutate(self, x, g, gamma, k, X, y):
-        return x - gamma * g + np.sqrt(2 * self.beta(k) ) * self.rnd_state.randn(x.shape[0], x.shape[1])
+        z = np.sqrt(2 * self.beta(k) ) * self.rnd_state.randn(x.shape[0], x.shape[1])
+        return x - gamma * g + z, False, z
 
     def update(self, x, y):
         pass
@@ -58,37 +59,45 @@ class RandomExploration(ExplorationStrategy):
 
     def mutate(self, x, g, gamma, k, X, y):
         if np.linalg.norm(g, ord=2) < self.eps:
-            return self.rnd_state.rand(x.shape[0], x.shape[1]) - 0.5
-        return x - gamma * g
+            return self.rnd_state.rand(x.shape[0], x.shape[1]) - 0.5, True, 0.0
+        return x - gamma * g, False, 0.0
     
     def update(self, x, y):
         pass
 
 class GAExploration(ExplorationStrategy):
-    def __init__(self, perturbation_size, popsize : int = 10, seed : int = 42):
+    def __init__(self, perturbation_size, popsize : int = 10, eps : float = 1e-5, seed : int = 42):
         self.perturbation_size = perturbation_size
         self.rnd_state = np.random.RandomState(seed)
         self.popsize = popsize
-        self.de = _DE(p.Array(shape=(perturbation_size, )).set_bounds(-0.5, 0.5), config=DifferentialEvolution(popsize=popsize, crossover="twopoints"))
+        self.eps = eps
+        self.current_elem = None
+        self.de = _DE(p.Array(shape=(1, perturbation_size)), config=DifferentialEvolution(popsize=popsize, crossover="twopoints"))
 
     def mutate(self, x, g, gamma, k, X, y):
         if np.linalg.norm(g, ord=2) < self.eps:
             self.current_elem = self.de.ask()
-            return self.current_elem.value
-        return x - gamma * g 
+            return self.current_elem.value, True, 0.0
+        return x - gamma * g, False, 0.0
     
     def update(self, x, y):
+        if self.current_elem is None:
+            self.de.suggest(x)
+            self.current_elem = self.de.ask()
+
         self.de.tell(self.current_elem, y)
+        self.current_elem = None
 
 
 def get_expl_strategy(strategy: ExplorationStrategyID, params: dict):
     if strategy == ExplorationStrategyID.NOEXPLORATION:
         return NoExploration()
     if strategy == ExplorationStrategyID.RANDOM:
-        return RandomExploration(eps=params['eps'], patience=params['patience'], seed=params['seed'])
+        return RandomExploration(eps=params['eps'],  seed=params['seed'])
     if strategy == ExplorationStrategyID.LANGEVIN:
         return LangevinExploration(beta=params['beta'], seed=params['seed'])
-
+    if strategy == ExplorationStrategyID.GA:
+        return GAExploration(perturbation_size=params['perturbation_size'], popsize=params['popsize'], seed=params['seed'])
 
 
 
@@ -110,11 +119,7 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
         self.init_stepsize = self._config.stepsize
         self.h = self._config.h
         self.h_0 = self._config.h
-
-        self.de = _DE(p.Array(shape=(3, )).set_bounds(0, 1), config=DifferentialEvolution(popsize=self.popsize, crossover="twopoints"))
-        self.de_initialized = False
-        self.manipulation_function= self._config.manipulation_function
-
+        self.exploration_strategy = self._config.exploration_strategy
         self.armijo_constant = self._config.armijo_constant
         self.min_stepsize = self._config.min_stepsize
         self.max_stepsize = self._config.max_stepsize
@@ -122,11 +127,12 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
         self.expansion_factor = self._config.expansion_factor
         self.current_iterate = None
         self.phase = ZEXEPhase.ITERATE
+        self.z = 0.0
+
         self.rnd_state = np.random.RandomState(self._config.seed)
         self.current_idx = 0
         self.d = self.parametrization.value.shape[1]
         self.best = None
-        self.best_light = None
         self.k = 0
         self.g = None
         self.X, self.Y = np.empty((0,), dtype=np.int64), np.empty((0,), dtype=np.int64)# [], []
@@ -147,97 +153,72 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
             g += ((self.fvalues[i + 1] - self.fvalues[0]) / self.h ) * self.P[:, i]
         return g
 
-    def _get_exploration_value(self):
-        self.current_expl = self.de.ask()
-        pert_size = int((self.max_pert_size - 1024)* self.current_expl.value[0] + 1024)
-
-#        c_size = int((pert_size - 1024)* self.current_expl.value[1] + 1024)
-#        print("PERT SIZE: ", pert_size, c_size)
- #       n_sec = int(pert_size // (c_size - 8))
-        n_sec = int((self.num_sections - 1)* self.current_expl.value[1] + 1)
-        c_size = (pert_size - 8) // n_sec
-#        if c_size < 1024:
-#            c_size = 1024
-        # n_sec = int((self.max_sections - 1) * self.current_expl.value[0] + 1)
-        # c_size = int((self.max_content_size - 512)* self.current_expl.value[1] + 512)
-        st_from = int(self.X.shape[0] *self.current_expl.value[2])
-        total_size = (c_size +8 )*n_sec
-        new_iterate = np.empty((0,), dtype=np.int64)
-        print("[EXPLORATION] NUM SEC: {n_sec}".format(n_sec=n_sec))
-        print("[EXPLORATION] CONTENT SIZE: {c_size}".format(c_size=c_size))
-        while st_from + total_size - new_iterate.shape[0] > self.X.shape[0]:
-            new_iterate = np.hstack((new_iterate, self.X[st_from:]))
-            st_from = 0
-        if new_iterate.shape[0] < total_size:
-            new_iterate = np.hstack((new_iterate, self.X[st_from:st_from + total_size - new_iterate.shape[0]]))
-        self.manipulation_function.how_many_sections = n_sec
-        self.manipulation_function.content_size = c_size #- 8
-        self.parametrization= p.Array(init=new_iterate).set_bounds(0, 255)
-        self.d = new_iterate.shape[0]
-        return self.parametrization
 
     def _internal_ask_candidate(self) -> p.Parameter:
         if self.phase == ZEXEPhase.FORWARD_DIRECTION:
             new_iterate = self.current_iterate + self.h * self.P[:, self.current_idx].reshape((1, self.d))
             
         if self.phase == ZEXEPhase.LINE_SEARCH_STEP:
-            new_iterate = self.current_iterate  - self.stepsize * self.g 
-
-        if self.phase == ZEXEPhase.EXPLORATION:
-            return self._get_exploration_value()
+            new_iterate = self.current_iterate  - self.stepsize * self.g + self.z
 
 
         if self.phase == ZEXEPhase.ITERATE:
             self.g = self._grad_ask()
 
             self.k += 1
-            print("VALUES: ", self.fvalues)
+            print("[ITERATE] VALUES: ", self.fvalues)
             self.h = max(self.h / self.k, 0.01)
-
-            if np.linalg.norm(self.g) < 0.01: 
-                print("EXPLORATION")
+            if self.h == 0.01:
+                self.h = self.h_0
+            new_iterate, exploration, self.z = self.exploration_strategy.mutate(self.current_iterate, self.g, self.stepsize, self.k, self.X, self.Y)
+            if exploration:
                 self.phase = ZEXEPhase.EXPLORATION
-#                self.num_iters = 0
-                return self._get_exploration_value()# self.parametrization#new_parametrization#self.parametrization.spawn_child(new_iterate.reshape(1, -1).astype(np.int64)) 
-            else:
-                print("EXPLOITATION")
+            elif np.linalg.norm(self.g) > 1e-3:
                 self.phase = ZEXEPhase.LINE_SEARCH_STEP
-                candidate = self.best[0]
-                x_tilde = (candidate.value / 255.0) - 0.5 # put in [-0.5, 0.5]
-                x_tilde = np.atanh(1.999999 * x_tilde) # go to tanh space
-
-                self.current_iterate = x_tilde
-                self.current_value = self.best[1]
-                self.manipulation_function.how_many_sections = self.best[2]
-                self.manipulation_function.content_size = self.best[3]
-                new_iterate = self.current_iterate - self.stepsize * self.g
+            
         new_iterate = (255.0*((np.tanh(new_iterate)/2) + 0.5)).astype(np.int64)
         self.parametrization= p.Array(init=new_iterate).set_bounds(0, 255)
 
         return self.parametrization#.spawn_child(new_iterate.astype(np.int64)) 
+            
+#             if np.linalg.norm(self.g) < 0.01: 
+#                 print("EXPLORATION")
+#                 self.phase = ZEXEPhase.EXPLORATION
+# #                self.num_iters = 0
+#                 return self._get_exploration_value()# self.parametrization#new_parametrization#self.parametrization.spawn_child(new_iterate.reshape(1, -1).astype(np.int64)) 
+#             else:
+#                 print("EXPLOITATION")
+#                 self.phase = ZEXEPhase.LINE_SEARCH_STEP
+#                 candidate = self.best[0]
+#                 x_tilde = (candidate.value / 255.0) - 0.5 # put in [-0.5, 0.5]
+#                 x_tilde = np.atanh(1.999999 * x_tilde) # go to tanh space
+
+#                 self.current_iterate = x_tilde
+#                 self.current_value = self.best[1]
+#                 self.manipulation_function.how_many_sections = self.best[2]
+#                 self.manipulation_function.content_size = self.best[3]
+#                 new_iterate = self.current_iterate - self.stepsize * self.g
+#         new_iterate = (255.0*((np.tanh(new_iterate)/2) + 0.5)).astype(np.int64)
+#         self.parametrization= p.Array(init=new_iterate).set_bounds(0, 255)
+
+#         return self.parametrization#.spawn_child(new_iterate.astype(np.int64)) 
 
 
     def _internal_tell_candidate(self, candidate: p.Parameter, loss: tp.FloatLoss) -> None:
         x_tilde = (candidate.value / 255.0) - 0.5 # put in [-0.5, 0.5]
         x_tilde = np.atanh(1.999999 * x_tilde) # go to tanh space
+        self.exploration_strategy.update(x_tilde, loss)
 
-        if self.best is None or (self.best[1] > -0.5 and self.best[1] > loss):
-            self.best = (candidate, loss, self.manipulation_function.how_many_sections, self.manipulation_function.content_size)
+        if self.best is None or self.best[1] > loss:
+            self.best = (candidate, loss)
 
-
-        if self.reduce_size:
-            if (loss < -0.5 and ( (self.best[2] * (8 + self.best[3]) > self.manipulation_function.how_many_sections * (8+ self.manipulation_function.content_size) ) or (self.best[2] * (8 + self.best[3]) == self.manipulation_function.how_many_sections * (8+ self.manipulation_function.content_size) and self.best[1] > loss) or self.best[1] > -0.5)):
-                self.best = (candidate, loss, self.manipulation_function.how_many_sections, self.manipulation_function.content_size)
-                self.max_pert_size = self.manipulation_function.how_many_sections * (8+ self.manipulation_function.content_size)
-        else:
-            if loss < self.best[1]:
-                self.best = (candidate, loss, self.manipulation_function.how_many_sections, self.manipulation_function.content_size)
 
         if self.g is not None:
-            print(f"[--] k: {self.k}\tf(x_k): {loss}\tx_k: {candidate.value}\th: {self.h}\t||g||: {np.linalg.norm(self.g)}\tbest: {self.best[1]}\td: {self.best[2] * (8 + self.best[3])}")
+            print(f"[{str(self.phase)}] k: {self.k}\tf(x_k): {loss}\tx_k: {candidate.value}\th: {self.h}\t||g||: {np.linalg.norm(self.g)}\tbest: {self.best[1]}")
 
         if self.current_iterate is None:
             self.current_iterate = x_tilde #candidate.value
+            self.current_value = loss
         if self.phase == ZEXEPhase.ITERATE:
             self.phase = ZEXEPhase.FORWARD_DIRECTION
             self.iterates = [x_tilde]
@@ -246,53 +227,43 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
             self.P = self.generate_direction_matrix()
         elif self.phase == ZEXEPhase.FORWARD_DIRECTION:
             self.iterates.append(x_tilde)
-            self.fvalues.append(loss)
+            self.fvalues.append(loss )
             self.current_idx += 1
             if self.current_idx == self.num_directions:
                 self.phase = ZEXEPhase.ITERATE
                 self.current_idx = 0
         elif self.phase == ZEXEPhase.LINE_SEARCH_STEP:
-            print("[LS] phase: {},  loss: {}, cond: {}, stepsize: {}".format(self.phase, loss, self.current_value - self.armijo_constant * self.stepsize * np.square(np.linalg.norm(self.g)), self.stepsize))
             cond = self.current_value - self.armijo_constant * self.stepsize * np.square(np.linalg.norm(self.g))
-            if loss < self.current_value - self.armijo_constant * self.stepsize * np.square(np.linalg.norm(self.g)):
-                print("[--] CONDITION STATIFIED -> BUILD DIRECTION")
+            print(f"[{str(self.phase)}] loss: {loss}, cond: {cond}, stepsize: {self.stepsize}")
+            if loss  < cond or self.stepsize <= self.min_stepsize:
                 self.current_iterate = x_tilde
                 self.current_value = loss
                 self.iterates = [x_tilde]
-                self.fvalues = [loss]
+                self.fvalues = [loss ]
                 self.P = self.generate_direction_matrix()
                 self.current_idx = 0 
                 self.phase = ZEXEPhase.FORWARD_DIRECTION
                 self.stepsize = min(self.stepsize * self.expansion_factor, self.max_stepsize)
-            elif self.stepsize <= self.min_stepsize:
-                print("[--] MIN STEPSIZE REACHED -> EXPLORATION")
-                self.current_iterate = x_tilde
-                self.current_value = loss
-                self.iterates = [x_tilde]
-                self.fvalues = [loss]
-                self.P = self.generate_direction_matrix()
-                self.phase = ZEXEPhase.FORWARD_DIRECTION
-                self.current_idx = 0
-                self.stepsize = self.init_stepsize
-                self.k = 0
-                self.h = self.h_0
+                if self.stepsize <= self.min_stepsize:
+                    print(f"[{str(self.phase)}] MIN STEPSIZE REACHED")
+                    self.h = self.h_0
+                    self.k = 0
             else:
-                self.stepsize = self.stepsize * self.contraction_factor
+                self.stepsize = max(self.stepsize * self.contraction_factor, self.min_stepsize)
         elif self.phase == ZEXEPhase.EXPLORATION:
-            print("[--] RECEIVED EXPLORATION VALUE")
+            print(f"[{str(self.phase)}] RECEIVED EXPLORATION VALUE")
 #            current_content_size = self.manipulation_function.content_size if self.manipulation_function.content_size < 65536 else 65536
-            reg = (self.manipulation_function.how_many_sections * (8 + self.manipulation_function.content_size)) / (1000 * (8 + 65536))
-            self.de.tell(self.current_expl, loss + reg)            
-#            self.num_iters+=1
-#            if self.num_iters >= 1:#self.popsize:
-            x_tilde = (self.best[0].value / 255.0) - 0.5 # put in [-0.5, 0.5]
-            x_tilde = np.atanh(1.999999 * x_tilde) # go to tanh space
+#             reg = (self.manipulation_function.how_many_sections * (8 + self.manipulation_function.content_size)) / (1000 * (8 + 65536))
+#             self.de.tell(self.current_expl, loss + reg)            
+# #            self.num_iters+=1
+# #            if self.num_iters >= 1:#self.popsize:
+#             x_tilde = (self.best[0].value / 255.0) - 0.5 # put in [-0.5, 0.5]
+#             x_tilde = np.atanh(1.999999 * x_tilde) # go to tanh space
             self.current_iterate = x_tilde
-            self.current_value = self.best[1]
-            self.manipulation_function.how_many_sections = self.best[2]
-            self.manipulation_function.content_size = self.best[3]
-            self.fvalues = [self.best[1]]
-            self.d = (self.manipulation_function.how_many_sections * (8 + self.manipulation_function.content_size))
+            self.current_value = loss #self.best[1]
+ #           self.manipulation_function.how_many_sections = self.best[2]
+  #          self.manipulation_function.content_size = self.best[3]
+            self.fvalues = [loss]
             self.current_idx = 0
             self.P = self.generate_direction_matrix()
             self.phase = ZEXEPhase.FORWARD_DIRECTION
@@ -309,8 +280,6 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
     def recommend(self) -> p.Parameter:
 
         print("[REC] recommend: ",self.best)
-        self.manipulation_function.how_many_sections = self.best[2]
-        self.manipulation_function.content_size = self.best[3]
         return self.best[0]
 
 
@@ -324,27 +293,22 @@ class ZEXEOptimizer(ConfiguredOptimizer):
                     stepsize: float = 1.0, 
                     h : float = 1.0,
                     num_directions : int = 1,
-                    manipulation_function = None,
                     armijo_constant : float = 1e-5,
                     min_stepsize : float = 1e-5,
                     max_stepsize : float = 1e3,
-                    popsize : int = 10,
                     contraction_factor : float = 0.5,
                     expansion_factor : float = 2.0,
                     exploration_strategy: ExplorationStrategyID = ExplorationStrategyID.RANDOM,
-                    expl_strategy_params: dict = {},                    
-                    beta : float = 0.001,
+                    expl_strategy_params: dict = {},   
                     seed: int = 42):
         self.name = "ZEXE"
         super().__init__(_ZEXE, locals(), as_config=True)
         self.stepsize = stepsize #if isinstance(stepsize, Callable) else lambda _: stepsize
         self.h = h #if isinstance(h, Callable) else lambda _: h
-        self.popsize = popsize
         self.max_stepsize = max_stepsize
         self.armijo_constant = armijo_constant
         self.num_directions = num_directions
         self.min_stepsize = min_stepsize
-        self.manipulation_function= manipulation_function
         self.contraction_factor = contraction_factor
         self.expansion_factor = expansion_factor
         self.exploration_strategy = get_expl_strategy(exploration_strategy, expl_strategy_params)
