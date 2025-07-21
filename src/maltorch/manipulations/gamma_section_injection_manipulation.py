@@ -33,15 +33,17 @@ class GAMMASectionInjectionManipulation(ByteManipulation):
         self._names = [
             ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)) for _ in range(self.how_many_sections)
         ]
-        for path in sorted(self.benignware_folder.glob("*"))[:100]:
+        for path in sorted(self.benignware_folder.glob("*")):
             if not lief.is_pe(str(path)):
                 continue
             lief_pe = lief.parse(str(path))
             for s in lief_pe.sections:
                 if s.name not in self.which_sections:
                     continue
+
                 if len(self._sections) < self.how_many_sections:
                     self._sections.append(list(s.content))
+
         super().__init__(IdentityInitializer(), domain_constraints, perturbation_constraints)
 
     def _apply_manipulation(
