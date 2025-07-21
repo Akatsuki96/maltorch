@@ -78,17 +78,17 @@ model = create_model(model_name, threshold)
 def run_experiment(fpath_rep):
     file_path, r = fpath_rep
     
-    perturbation_size = []
-    for i in range(5):
-        if os.path.exists(f"{gamma_result_folder}/gamma_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{i}.txt"):
-            with open(f"{gamma_result_folder}/gamma_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{i}.txt", "r") as f:
-                line = f.readline().split(",")
-                if len(line) > 1:
-                    plain_length = int(line[4])
-                    adv_length = int(line[5])
-                    perturbation_size.append(adv_length - plain_length)
+    # perturbation_size = []
+    # for i in range(5):
+    #     if os.path.exists(f"{gamma_result_folder}/gamma_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{i}.txt"):
+    #         with open(f"{gamma_result_folder}/gamma_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{i}.txt", "r") as f:
+    #             line = f.readline().split(",")
+    #             if len(line) > 1:
+    #                 plain_length = int(line[4])
+    #                 adv_length = int(line[5])
+    #                 perturbation_size.append(adv_length - plain_length)
 
-    perturbation_size = int(np.mean(perturbation_size)) if len(perturbation_size) > 0 else global_psize
+    perturbation_size =  global_psize
     content_size = (int(perturbation_size * fraction_of_gamma_perturbation) // num_sections) - 8
 
 

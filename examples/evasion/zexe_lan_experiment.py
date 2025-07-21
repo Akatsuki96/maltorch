@@ -88,7 +88,9 @@ def run_experiment(fpath_rep):
                     adv_length = int(line[5])
                     perturbation_size.append(adv_length - plain_length)
 
-    perturbation_size = int(np.mean(perturbation_size)) if len(perturbation_size) > 0 else global_psize
+#    perturbation_size = int(np.mean(perturbation_size)) if len(perturbation_size) > 0 else 
+    perturbation_size = global_psize
+    print("PERT SIZE: ", perturbation_size)
     content_size = (int(perturbation_size * fraction_of_gamma_perturbation) // num_sections) - 8
 
     expl_start = ExplorationStrategyID.LANGEVIN
