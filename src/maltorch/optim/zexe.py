@@ -166,7 +166,7 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
             self.g = self._grad_ask()
 
             self.k += 1
-            print("[ITERATE] VALUES: ", self.fvalues)
+            print(f"[{str(self.phase)}] VALUES: ", self.fvalues)
             self.h = max(self.h / self.k, 0.01)
             if self.h == 0.01:
                 self.h = self.h_0

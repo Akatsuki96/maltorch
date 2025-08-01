@@ -67,8 +67,8 @@ for file in os.listdir(gamma_result_folder):
                 adv_length = int(line[5])
                 global_psize.append(adv_length - plain_length)
 global_psize = int(np.mean(global_psize))
-# print("[--] Average perturbation size: ", np.mean(avg_pert_size), np.std(avg_pert_size))
-# perturbation_size = int(np.mean(avg_pert_size))
+#print("[--] Average perturbation size: ", np.mean(avg_pert_size), np.std(avg_pert_size))
+#perturbation_size = int(np.mean(avg_pert_size))
 #exit()
 reps = 5
 model = create_model(model_name, threshold) 

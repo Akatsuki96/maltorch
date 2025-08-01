@@ -153,10 +153,16 @@ class BackendAttack(BaseEvasionAttack):
             x_adv, delta = self._apply_manipulation(samples, delta)
             scores = model.decision_function(x_adv)
             loss = self.loss_function(scores, target) * multiplier
+#            print(f"Score: {scores}, loss: {loss}")
+#            print(f"Predict: {model.predict(x_adv)}")
             delta = self._optimizer_step(delta, loss)
             budget += self._consumed_budget()
             self._track(budget, loss, scores, x_adv, delta)
             self._track_best(loss, delta)
+            if model.predict(x_adv).flatten().item() == 0.0:
+                print("Early stopping, evaded!")
+                break
+
         best_delta = self._get_best_delta()
         best_x, _ = self._apply_manipulation(samples, best_delta)
         return best_x, self._best_delta

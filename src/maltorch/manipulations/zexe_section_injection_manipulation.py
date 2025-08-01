@@ -46,7 +46,7 @@ class ZEXESectionInjectionManipulation(ByteManipulation):
 #        exit()
         # TODO: section injection is executed ONLY sample-wise, since it only works with GradFree
         lief_pe: lief.PE = lief.PE.parse(x.data.cpu().flatten().tolist())
-        sections_names = delta.reshape((self.how_many_sections, self.content_size + 8)).to(dtype=torch.int64)
+        sections_names = delta.clone().reshape((self.how_many_sections, self.content_size + 8)).to(dtype=torch.int64)
         for i in  range(self.how_many_sections):
             #print(((sections_names[i][:8] % 95) + 33))
             name = ''.join(chr(i.item()) for i in ((sections_names[i][:8] % 95) + 33))
