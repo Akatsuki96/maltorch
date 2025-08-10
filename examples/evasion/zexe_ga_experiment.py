@@ -116,6 +116,13 @@ def run_experiment(fpath_rep):
                 seed = 1841 + 201*r
             )
 
+    if os.path.isfile(f"{out_dir}/zexe_lan_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{r}.txt"):
+        with open(f"{out_dir}/zexe_lan_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{r}.txt", "r") as f:
+            lines = f.readlines()
+            if len(lines) > 0:
+                return
+
+
     print(f"[{r}/{reps}] Attacking {file_path}...")
     print("[--] GAMMA PERTURBATION SIZE: ", perturbation_size)
     print("[--] ZEXE PERTURBATION SIZE: ", int((content_size + 8) * num_sections))

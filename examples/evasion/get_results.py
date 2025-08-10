@@ -1,30 +1,40 @@
 import numpy as np
 import os 
 
-algorithms = ['gamma', 'zexe_lan']#['gamma'] #['rs', 'zexe', 'gamma', 'zexers', 'zexe_lan', 'zexe_ga']
-datasets = ['malconv']
+algorithms = ['gamma', 'zexe_ga']#['gamma'] #['rs', 'zexe', 'gamma', 'zexers', 'zexe_lan', 'zexe_ga']
+datasets = ['ember_gbdt']
 
 def get_results(algorithm, dataset, num_sections):
     evasion = []
     added_bytes = []
     files = os.listdir(f"results/{dataset}/{algorithm}")
+    valid_files= []
+    for file in os.listdir("./results/ember_gbdt/zexe_ga"):
+        if int(file.split("_")[-2]) == num_sections and int(file.split("_")[-1].split(".")[0]) == 0:
+            with open(f"./results/ember_gbdt/zexe_ga/{file}", 'r') as f:
+                if len(f.readlines()) == 0:
+                    continue
+            valid_files.append(file.split("_")[-5])
 #    files = os.listdir(f"test/")
+ #   print(valid_files)
     for file in files:        
-        if int(file.split("_")[-2]) != num_sections:# or int(file.split("_")[-1].split(".")[0]) != 0:
+        if int(file.split("_")[-2]) != num_sections or file.split("_")[-5] not in valid_files or int(file.split("_")[-1].split(".")[0]) != 0:
             continue
 #        print(file)
         with open(f"results/{dataset}/{algorithm}/{file}", "r") as f:
 #        with open(f"test/{file}", "r") as f:
-            for line in f.readlines():
+            print(file)
+            for line in f.readlines()[:1]:
                 splitted = line.split(",")
-                if float(splitted[0]) == 0:
-                    continue
+#                if float(splitted[0]) == 0:
+#                    continue
 #                if 1 - float(splitted[2]) == 1.0:
 #                    print("BREAK!")
 #                    print(splitted[1], splitted[3], file)
 
                 evasion.append(1 - float(splitted[2]))
                 added_bytes.append(float(splitted[5]) - float(splitted[4]) )
+#        print(len(evasion), evasion)
 #                if len(evasion) == 91:
 #                    return np.mean(evasion), np.mean(added_bytes), np.std(added_bytes), len(evasion)
     return np.mean(evasion), np.mean(added_bytes), np.std(added_bytes), len(evasion)
