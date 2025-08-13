@@ -57,16 +57,16 @@ def create_model(name, threshold):
 
 regex = re.compile(r"gamma_[a-zA-Z0-9]+_({})_({})_(\d)".format(model_name, num_sections))
 
-global_psize = []
-for file in os.listdir(gamma_result_folder):
-    if regex.match(file):
-        with open(f"{gamma_result_folder}/{file}", "r") as f:
-            line = f.readline().split(",")
-            if len(line) > 1:
-                plain_length = int(line[4])
-                adv_length = int(line[5])
-                global_psize.append(adv_length - plain_length)
-global_psize = int(np.mean(global_psize))
+# global_psize = []
+# for file in os.listdir(gamma_result_folder):
+#     if regex.match(file):
+#         with open(f"{gamma_result_folder}/{file}", "r") as f:
+#             line = f.readline().split(",")
+#             if len(line) > 1:
+#                 plain_length = int(line[4])
+#                 adv_length = int(line[5])
+#                 global_psize.append(adv_length - plain_length)
+# global_psize = int(np.mean(global_psize))
 # print("[--] Average perturbation size: ", np.mean(avg_pert_size), np.std(avg_pert_size))
 # perturbation_size = int(np.mean(avg_pert_size))
 #exit()
@@ -88,7 +88,7 @@ def run_experiment(fpath_rep):
                     adv_length = int(line[5])
                     perturbation_size.append(adv_length - plain_length)
 
-    perturbation_size = int(np.mean(perturbation_size)) if len(perturbation_size) > 0 else global_psize
+    perturbation_size = int(np.mean(perturbation_size)) # if len(perturbation_size) > 0 else global_psize
 
 
     content_size = (int(perturbation_size * fraction_of_gamma_perturbation) // num_sections) - 8
@@ -116,11 +116,12 @@ def run_experiment(fpath_rep):
                 seed = 1841 + 201*r
             )
 
-    if os.path.isfile(f"{out_dir}/zexe_lan_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{r}.txt"):
-        with open(f"{out_dir}/zexe_lan_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{r}.txt", "r") as f:
-            lines = f.readlines()
-            if len(lines) > 0:
-                return
+    # if os.path.exists(f"{out_dir}/zexe_ga_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{r}.txt"):
+    #     with open(f"{out_dir}/zexe_ga_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{r}.txt", "r") as f:
+    #         lines = f.readlines()
+    #         if len(lines) > 0:
+    #             print("[--] SKIPPED!")
+    #             return
 
 
     print(f"[{r}/{reps}] Attacking {file_path}...")
@@ -142,12 +143,28 @@ def run_experiment(fpath_rep):
             print("ADDED BYTES", x_adv.flatten().shape[0] - x.flatten().shape[0])
         f.write(f"{pre_accuracy},{pre_score},{accuracy},{score},{plain_length},{adv_length}\n")
         f.flush()
+    dl = None
+    x, y, x_adv = None, None, None
+    adv_dl = None
+    
 
 
 if __name__ == "__main__":
-    multiprocessing.set_start_method('spawn')
+    multiprocessing.set_start_method('spawn', force=True)
 
+    attack_list = list(itertools.product(file_paths, reps_list))
+    malware_to_attack = []
+    for file_path, r in attack_list:
+        if os.path.exists(f"{out_dir}/zexe_ga_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{r}.txt"):
+            with open(f"{out_dir}/zexe_ga_{str(file_path).split('/')[-1].split('.')[0]}_{model_name}_{num_sections}_{r}.txt", "r") as f:
+                lines = f.readlines()
+                if len(lines) > 0:
+                    print("[!!] SKIPPED!")
+                    continue
+        malware_to_attack.append((file_path, r))
+#    print(len(malware_to_attack))
+#    exit()  
     with Pool(processes=num_processes) as p:
 
-        p.map(run_experiment, list(itertools.product(file_paths, reps_list)))
+       _ =  p.map(run_experiment, malware_to_attack)
 

@@ -7,11 +7,11 @@ datasets = ['ember_gbdt']
 def get_results(algorithm, dataset, num_sections):
     evasion = []
     added_bytes = []
-    files = os.listdir(f"results/{dataset}/{algorithm}")
+    files = os.listdir(f"/mnt/data/mrando/zexe_results/{dataset}/{algorithm}")
     valid_files= []
-    for file in os.listdir("./results/ember_gbdt/zexe_ga"):
+    for file in os.listdir("/mnt/data/mrando/zexe_results/ember_gbdt/zexe_ga"):
         if int(file.split("_")[-2]) == num_sections and int(file.split("_")[-1].split(".")[0]) == 0:
-            with open(f"./results/ember_gbdt/zexe_ga/{file}", 'r') as f:
+            with open(f"/mnt/data/mrando/zexe_results/ember_gbdt/zexe_ga/{file}", 'r') as f:
                 if len(f.readlines()) == 0:
                     continue
             valid_files.append(file.split("_")[-5])
@@ -21,11 +21,12 @@ def get_results(algorithm, dataset, num_sections):
         if int(file.split("_")[-2]) != num_sections or file.split("_")[-5] not in valid_files or int(file.split("_")[-1].split(".")[0]) != 0:
             continue
 #        print(file)
-        with open(f"results/{dataset}/{algorithm}/{file}", "r") as f:
+        with open(f"/mnt/data/mrando/zexe_results/{dataset}/{algorithm}/{file}", "r") as f:
 #        with open(f"test/{file}", "r") as f:
-            print(file)
+#            print(file)
             for line in f.readlines()[:1]:
                 splitted = line.split(",")
+#                print(line)
 #                if float(splitted[0]) == 0:
 #                    continue
 #                if 1 - float(splitted[2]) == 1.0:

@@ -272,8 +272,8 @@ class _ZEXE(Optimizer): # It has to extend optimizer (ConfiguredOptimizer or Opt
 #                self.X = self.X[10000:]
 #                self.Y = self.Y[10000:]
 #            exit()
-        self.X = np.hstack((self.X, candidate.value.flatten()))
-        self.Y = np.hstack((self.Y, loss))
+#        self.X = np.hstack((self.X, candidate.value.flatten()))
+#        self.Y = np.hstack((self.Y, loss))
 #        self.X.append(x_tilde)
 #        self.Y.append(loss)
 
